@@ -1,0 +1,52 @@
+name: Build and Deploy BulkyERP API
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Core permission needed for OIDC token exchanges
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_WEBAPP_NAME: 'BulkyERPApi' # Change to your actual App Service Name
+  PROJECT_PATH: './WebApiMain'                             # Path to your project folder 
+  DOTNET_VERSION: '10.0.x'                               # Set to your .NET Version (e.g. 6.0, 8.0, 9.0)
+
+jobs:
+  build-and-deploy:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET Core SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore Dependencies
+        run: dotnet restore ${{ env.PROJECT_PATH }}/Payroll.csproj
+
+      - name: Build Project
+        run: dotnet build ${{ env.PROJECT_PATH }}/Payroll.csproj --configuration Release --no-restore
+
+      - name: Publish API
+        run: dotnet publish ${{ env.PROJECT_PATH }}/Payroll.csproj --configuration Release --output ./publish --no-build
+
+      - name: Login to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to Azure Web App (Windows)
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          package: ./publish
